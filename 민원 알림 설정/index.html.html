@@ -1,0 +1,1131 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>고객 민원 콜백 알리미 - 실무용 타임보드</title>
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Font Awesome 6 CDN -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+  <style>
+    @import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css');
+    body {
+      font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, Roboto, sans-serif;
+    }
+    .pulse-danger {
+      animation: pulseDanger 1.6s infinite;
+    }
+    @keyframes pulseDanger {
+      0%, 100% { box-shadow: 0 0 0 0 rgba(225, 29, 72, 0.45); }
+      70% { box-shadow: 0 0 0 12px rgba(225, 29, 72, 0); }
+    }
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: #f1f5f9;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #cbd5e1;
+      border-radius: 4px;
+    }
+  </style>
+</head>
+<body class="bg-slate-100 text-slate-800 antialiased min-h-screen flex flex-col selection:bg-indigo-100 selection:text-indigo-900">
+
+  <!-- 헤더 영역 -->
+  <header class="bg-white border-b border-slate-200 sticky top-0 z-30 shadow-xs">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-3">
+      
+      <!-- 로고 및 실시간 디지털 시계 -->
+      <div class="flex items-center gap-3">
+        <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-indigo-700 via-indigo-600 to-sky-500 flex items-center justify-center text-white shadow-md shadow-indigo-200 text-lg">
+          <i class="fa-solid fa-headset"></i>
+        </div>
+        <div>
+          <div class="flex items-center gap-2">
+            <h1 class="text-base font-bold text-slate-900 tracking-tight">민원 콜백 타임보드</h1>
+            <span class="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-200">실무 프로</span>
+          </div>
+          <p id="currentClock" class="text-xs text-slate-500 font-mono tracking-tight">현재 시각 계산 중...</p>
+        </div>
+      </div>
+
+      <!-- 우측 컨트롤 툴바 -->
+      <div class="flex items-center gap-1.5 sm:gap-2">
+        <!-- 사운드 토글 -->
+        <button id="soundToggleBtn" onclick="toggleSound()" class="px-2.5 sm:px-3 py-1.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-xs font-semibold text-slate-700 transition shadow-2xs flex items-center gap-1.5 cursor-pointer">
+          <i class="fa-solid fa-volume-high text-emerald-600"></i>
+          <span class="hidden sm:inline">사운드 켬</span>
+        </button>
+
+        <!-- 데스크톱 푸시 권한 -->
+        <button id="notifPermBtn" onclick="requestNotification()" class="px-2.5 sm:px-3 py-1.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-xs font-semibold text-slate-700 transition shadow-2xs flex items-center gap-1.5 cursor-pointer">
+          <i class="fa-regular fa-bell text-indigo-600"></i>
+          <span class="hidden sm:inline">데스크톱 알림</span>
+        </button>
+
+        <!-- 엑셀 다운로드 -->
+        <button onclick="exportToCSV()" class="px-2.5 sm:px-3 py-1.5 rounded-lg border border-emerald-500 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 text-xs font-bold transition shadow-2xs flex items-center gap-1.5 cursor-pointer">
+          <i class="fa-solid fa-file-excel"></i>
+          <span class="hidden md:inline">엑셀 다운로드</span>
+        </button>
+
+        <!-- 데이터 백업/복원 메뉴 -->
+        <button onclick="openBackupModal()" class="px-2.5 sm:px-3 py-1.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-xs font-semibold text-slate-600 transition shadow-2xs flex items-center gap-1.5 cursor-pointer" title="데이터 백업 및 복원">
+          <i class="fa-solid fa-database"></i>
+          <span class="hidden lg:inline">백업/복원</span>
+        </button>
+
+        <!-- 새 콜백 등록 버튼 -->
+        <button onclick="openAddModal()" class="px-3.5 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white text-xs font-bold shadow-md shadow-indigo-200 transition flex items-center gap-1.5 cursor-pointer">
+          <i class="fa-solid fa-plus"></i>
+          <span>새 콜백 등록</span>
+        </button>
+      </div>
+
+    </div>
+  </header>
+
+  <!-- 메인 레이아웃 -->
+  <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-5 flex-1 w-full space-y-4">
+
+    <!-- 상단: 다음 예정 콜백 헤드업 카드 (Hero Card) -->
+    <div id="urgentHeroCard" class="hidden rounded-2xl p-5 text-white shadow-xl flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4 border transition-all duration-300">
+      <div class="flex items-center gap-4">
+        <div id="heroIconBox" class="w-14 h-14 rounded-2xl bg-white/20 flex items-center justify-center text-2xl font-bold shrink-0">
+          <i class="fa-solid fa-bell"></i>
+        </div>
+        <div>
+          <div class="flex items-center gap-2 mb-1">
+            <span class="text-[11px] font-extrabold uppercase tracking-wider px-2.5 py-0.5 rounded-full bg-black/25">
+              Next Priority Callback
+            </span>
+            <span id="heroPriorityBadge" class="text-xs"></span>
+          </div>
+          <div class="flex items-center gap-2 flex-wrap">
+            <h2 id="heroCustomerName" class="text-xl font-extrabold tracking-tight">고객명</h2>
+            <a id="heroTelLink" href="#" class="font-mono text-sm underline hover:text-indigo-200 flex items-center gap-1">
+              <i class="fa-solid fa-phone text-xs"></i> <span id="heroPhoneText">010-0000-0000</span>
+            </a>
+          </div>
+          <p id="heroTimeRemaining" class="text-xs text-white/90 mt-1 font-medium">시간 계산 중...</p>
+        </div>
+      </div>
+
+      <div class="flex flex-wrap items-center gap-2 shrink-0">
+        <a id="heroTelBtn" href="#" class="px-3.5 py-2 bg-white text-indigo-700 rounded-xl text-xs font-bold shadow hover:bg-indigo-50 flex items-center gap-1.5 cursor-pointer">
+          <i class="fa-solid fa-phone"></i> 즉시 전화
+        </a>
+        <button id="heroQuickSnoozeBtn" class="px-3.5 py-2 bg-black/30 hover:bg-black/40 text-white rounded-xl text-xs font-bold transition cursor-pointer">
+          +10분 연기
+        </button>
+        <button id="heroQuickDoneBtn" class="px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl text-xs font-bold shadow transition cursor-pointer flex items-center gap-1.5">
+          <i class="fa-solid fa-check"></i> 완료 처리
+        </button>
+      </div>
+    </div>
+
+    <!-- 검색 및 필터 툴바 & 일일 요약 지표 -->
+    <div class="grid grid-cols-1 lg:grid-cols-4 gap-3">
+      <!-- 검색 및 상태 필터 (3열) -->
+      <div class="lg:col-span-3 bg-white border border-slate-200 rounded-xl p-3 shadow-xs flex flex-wrap items-center justify-between gap-2.5">
+        <div class="flex items-center gap-2 flex-1 min-w-[240px]">
+          <i class="fa-solid fa-magnifying-glass text-slate-400 text-xs pl-2"></i>
+          <input type="text" id="searchInput" oninput="renderApp()" placeholder="고객명, 전화번호, 담당자, 메모 키워드 검색..." 
+            class="w-full text-xs outline-none bg-transparent py-1 text-slate-800 placeholder:text-slate-400">
+        </div>
+
+        <div class="flex items-center gap-2">
+          <select id="filterStatus" onchange="renderApp()" class="text-xs border border-slate-200 rounded-lg px-2.5 py-1.5 outline-none bg-slate-50 focus:bg-white font-medium text-slate-700">
+            <option value="pending">진행 중인 약속만</option>
+            <option value="all">전체 일정 보기</option>
+            <option value="completed">완료된 상담만</option>
+          </select>
+          <select id="filterPriority" onchange="renderApp()" class="text-xs border border-slate-200 rounded-lg px-2.5 py-1.5 outline-none bg-slate-50 focus:bg-white font-medium text-slate-700">
+            <option value="all">모든 긴급도</option>
+            <option value="urgent">🔴 긴급/불만</option>
+            <option value="high">🟠 중요 민원</option>
+            <option value="normal">🟢 일반 문의</option>
+            <option value="low">⚪ 단순 안내</option>
+          </select>
+          <select id="dateScopeSelect" onchange="renderApp()" class="text-xs border border-slate-200 rounded-lg px-2.5 py-1.5 outline-none bg-slate-50 focus:bg-white font-medium text-slate-700">
+            <option value="today">오늘 일정만</option>
+            <option value="all">모든 날짜</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- 요약 카운터 (1열) -->
+      <div class="bg-white border border-slate-200 rounded-xl px-4 py-2 shadow-xs flex items-center justify-around text-center">
+        <div>
+          <span class="text-[10px] font-bold text-slate-400 uppercase">대기</span>
+          <p id="statPending" class="text-lg font-bold text-indigo-600 leading-none mt-0.5">0</p>
+        </div>
+        <div class="w-px h-6 bg-slate-200"></div>
+        <div>
+          <span class="text-[10px] font-bold text-rose-500 uppercase">지연</span>
+          <p id="statOverdue" class="text-lg font-bold text-rose-600 leading-none mt-0.5">0</p>
+        </div>
+        <div class="w-px h-6 bg-slate-200"></div>
+        <div>
+          <span class="text-[10px] font-bold text-emerald-600 uppercase">완료</span>
+          <p id="statDone" class="text-lg font-bold text-emerald-600 leading-none mt-0.5">0</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- 콜백 리스트 컨테이너 -->
+    <div class="bg-white border border-slate-200 rounded-2xl shadow-xs overflow-hidden flex flex-col">
+      <div class="px-5 py-3.5 border-b border-slate-100 flex items-center justify-between">
+        <h3 class="text-xs font-bold text-slate-800 flex items-center gap-2 uppercase tracking-wider">
+          <i class="fa-regular fa-clock text-indigo-600"></i> 통화 예약 일정 목록
+        </h3>
+        <span id="listCountBadge" class="text-xs bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full font-semibold">0건</span>
+      </div>
+
+      <!-- 빈 리스트 상태 -->
+      <div id="emptyState" class="hidden p-14 text-center flex-col items-center justify-center">
+        <div class="w-12 h-12 bg-slate-100 text-slate-400 rounded-full flex items-center justify-center text-xl mb-2">
+          <i class="fa-solid fa-inbox"></i>
+        </div>
+        <p class="text-xs font-bold text-slate-700">해당 조건의 콜백 일정이 없습니다.</p>
+        <p class="text-[11px] text-slate-400 mt-0.5">우측 상단의 '+ 새 콜백 등록' 버튼을 눌러 새 통화 약속을 등록해 보세요.</p>
+      </div>
+
+      <!-- 아이템 렌더링 영역 -->
+      <div id="callbackListContainer" class="divide-y divide-slate-100 max-h-[620px] overflow-y-auto">
+        <!-- JS 렌더링 -->
+      </div>
+    </div>
+
+  </main>
+
+  <!-- 새 예약 / 수정 모달 -->
+  <div id="addModal" class="fixed inset-0 bg-slate-900/60 z-50 backdrop-blur-xs flex items-center justify-center p-4 hidden">
+    <div class="bg-white rounded-2xl shadow-2xl max-w-lg w-full overflow-hidden border border-slate-200">
+      
+      <div class="px-6 py-4 bg-slate-50 border-b border-slate-100 flex items-center justify-between">
+        <h3 id="modalTitle" class="font-bold text-slate-800 text-sm flex items-center gap-2">
+          <i class="fa-solid fa-phone-plus text-indigo-600"></i>
+          새 민원 콜백 예약 등록
+        </h3>
+        <button onclick="closeModal()" class="text-slate-400 hover:text-slate-600 text-lg cursor-pointer">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>
+
+      <form id="addForm" onsubmit="handleFormSubmit(event)" class="p-6 space-y-3.5">
+        <input type="hidden" id="editId" value="">
+
+        <!-- 고객명 & 연락처 -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs font-bold text-slate-700 mb-1">고객명 <span class="text-rose-500">*</span></label>
+            <input type="text" id="custName" required placeholder="예: 김민수 고객님"
+              class="w-full px-3 py-2 rounded-lg border border-slate-200 text-xs focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+          </div>
+          <div>
+            <label class="block text-xs font-bold text-slate-700 mb-1">연락처 <span class="text-rose-500">*</span></label>
+            <input type="tel" id="custPhone" required placeholder="010-0000-0000"
+              class="w-full px-3 py-2 rounded-lg border border-slate-200 text-xs focus:ring-2 focus:ring-indigo-500 focus:outline-none font-mono">
+          </div>
+        </div>
+
+        <!-- 약속 일시 -->
+        <div>
+          <label class="block text-xs font-bold text-slate-700 mb-1">통화 예정 일시 <span class="text-rose-500">*</span></label>
+          <input type="datetime-local" id="targetDateTime" required
+            class="w-full px-3 py-2 rounded-lg border border-slate-200 text-xs focus:ring-2 focus:ring-indigo-500 focus:outline-none font-mono">
+          
+          <!-- 빠른 시간 프리셋 버튼 -->
+          <div class="flex items-center gap-1.5 mt-1.5 text-xs text-slate-500">
+            <span class="text-[11px] font-bold text-slate-400">빠른 추가:</span>
+            <button type="button" onclick="setQuickTime(5)" class="px-2 py-0.5 bg-slate-100 hover:bg-slate-200 rounded text-slate-700 text-[11px] font-medium cursor-pointer">+5분</button>
+            <button type="button" onclick="setQuickTime(15)" class="px-2 py-0.5 bg-slate-100 hover:bg-slate-200 rounded text-slate-700 text-[11px] font-medium cursor-pointer">+15분</button>
+            <button type="button" onclick="setQuickTime(30)" class="px-2 py-0.5 bg-slate-100 hover:bg-slate-200 rounded text-slate-700 text-[11px] font-medium cursor-pointer">+30분</button>
+            <button type="button" onclick="setQuickTime(60)" class="px-2 py-0.5 bg-slate-100 hover:bg-slate-200 rounded text-slate-700 text-[11px] font-medium cursor-pointer">+1시간</button>
+            <button type="button" onclick="setTomorrowMorning()" class="px-2 py-0.5 bg-slate-100 hover:bg-slate-200 rounded text-slate-700 text-[11px] font-medium cursor-pointer">내일 10시</button>
+          </div>
+        </div>
+
+        <!-- 긴급도 & 담당자 -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs font-bold text-slate-700 mb-1">민원 긴급도 / 유형</label>
+            <select id="priority" class="w-full px-3 py-2 rounded-lg border border-slate-200 text-xs focus:ring-2 focus:ring-indigo-500 focus:outline-none bg-white font-medium">
+              <option value="urgent">🔴 긴급 / 불만 (최우선 응대)</option>
+              <option value="high">🟠 중요 (부서 협의 건)</option>
+              <option value="normal" selected>🟢 일반 문의 (단순 콜백)</option>
+              <option value="low">⚪ 단순 안내 (서류/결과 전송)</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-xs font-bold text-slate-700 mb-1">담당 상담원</label>
+            <input type="text" id="agentName" placeholder="예: 상담1팀 홍길동"
+              class="w-full px-3 py-2 rounded-lg border border-slate-200 text-xs focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+          </div>
+        </div>
+
+        <!-- 상담 템플릿 & 메모 -->
+        <div>
+          <div class="flex items-center justify-between mb-1">
+            <label class="text-xs font-bold text-slate-700">상담 메모 및 확인 사항</label>
+            <div class="flex items-center gap-1">
+              <button type="button" onclick="insertTemplate('단순안내')" class="text-[10px] bg-slate-100 px-1.5 py-0.5 rounded text-slate-600 hover:bg-slate-200 font-medium">단순안내</button>
+              <button type="button" onclick="insertTemplate('부재중')" class="text-[10px] bg-slate-100 px-1.5 py-0.5 rounded text-slate-600 hover:bg-slate-200 font-medium">부재중</button>
+              <button type="button" onclick="insertTemplate('환불검토')" class="text-[10px] bg-slate-100 px-1.5 py-0.5 rounded text-slate-600 hover:bg-slate-200 font-medium">환불검토</button>
+              <button type="button" onclick="insertTemplate('강성에스컬레이션')" class="text-[10px] bg-slate-100 px-1.5 py-0.5 rounded text-slate-600 hover:bg-slate-200 font-medium">강성민원</button>
+            </div>
+          </div>
+          <textarea id="memo" rows="3" placeholder="고객 요구사항이나 사전에 파악해 두어야 할 내용을 기록하세요."
+            class="w-full px-3 py-2 rounded-lg border border-slate-200 text-xs focus:ring-2 focus:ring-indigo-500 focus:outline-none resize-none"></textarea>
+        </div>
+
+        <!-- 하단 액션 버튼 -->
+        <div class="pt-2 flex items-center justify-end gap-2 border-t border-slate-100">
+          <button type="button" onclick="closeModal()" class="px-4 py-2 rounded-lg border border-slate-200 text-xs font-semibold text-slate-600 hover:bg-slate-50 cursor-pointer">
+            취소
+          </button>
+          <button type="submit" class="px-5 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold shadow-md shadow-indigo-200 cursor-pointer">
+            저장하기
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- 통화 완료 처리 및 결과 기록 모달 -->
+  <div id="completeModal" class="fixed inset-0 bg-slate-900/60 z-50 backdrop-blur-xs flex items-center justify-center p-4 hidden">
+    <div class="bg-white rounded-2xl shadow-2xl max-w-sm w-full p-5 border border-slate-200">
+      <div class="flex items-center gap-2 mb-3 text-emerald-600 font-bold text-sm">
+        <i class="fa-solid fa-circle-check text-base"></i>
+        <span>통화 결과 기록 및 완료 처리</span>
+      </div>
+      <p id="completeTargetInfo" class="text-xs text-slate-600 mb-3 font-medium">고객명 - 010-0000-0000</p>
+      
+      <div class="space-y-3">
+        <div>
+          <label class="block text-xs font-bold text-slate-700 mb-1">상담 처리 결과</label>
+          <select id="completeOutcome" class="w-full px-3 py-2 rounded-lg border border-slate-200 text-xs bg-white focus:ring-2 focus:ring-indigo-500 font-medium">
+            <option value="정상 해결">✅ 정상 통화 및 해결 완료</option>
+            <option value="부재중 (재시도 필요)">📞 고객 부재중 (추후 재연락 필요)</option>
+            <option value="재통화 약속">⏳ 통화 후 2차 약속 지정</option>
+            <option value="타부서 이관">➡️ 타부서/상위자 이관 완료</option>
+            <option value="단순 취소">❌ 단순 취소/철회</option>
+          </select>
+        </div>
+        <div>
+          <label class="block text-xs font-bold text-slate-700 mb-1">최종 결과 메모</label>
+          <input type="text" id="completeNote" placeholder="처리 내용 한 줄 요약 (선택 사항)"
+            class="w-full px-3 py-2 rounded-lg border border-slate-200 text-xs focus:ring-2 focus:ring-indigo-500">
+        </div>
+      </div>
+
+      <div class="mt-4 flex items-center justify-end gap-2">
+        <button onclick="closeCompleteModal()" class="px-3.5 py-1.5 border border-slate-200 rounded-lg text-xs font-semibold text-slate-600 hover:bg-slate-50 cursor-pointer">
+          취소
+        </button>
+        <button onclick="confirmComplete()" class="px-4 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold shadow cursor-pointer">
+          완료 확정
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 정시 도달 시 긴급 팝업 모달 -->
+  <div id="alarmPopupModal" class="fixed inset-0 bg-rose-950/70 z-50 backdrop-blur-xs flex items-center justify-center p-4 hidden">
+    <div class="bg-white rounded-3xl shadow-2xl max-w-md w-full p-6 text-center border-4 border-rose-500">
+      <div class="w-16 h-16 mx-auto bg-rose-100 text-rose-600 rounded-full flex items-center justify-center mb-3 text-3xl animate-bounce">
+        <i class="fa-solid fa-bell"></i>
+      </div>
+      <span class="inline-block px-3 py-0.5 bg-rose-100 text-rose-700 rounded-full text-xs font-bold uppercase tracking-wider mb-2">
+        통화 약속 시간 도달!
+      </span>
+      <h3 id="alarmPopupName" class="text-xl font-extrabold text-slate-900 mb-0.5">고객명</h3>
+      <a id="alarmPopupPhone" href="#" class="text-indigo-600 font-mono text-base font-bold hover:underline mb-3 inline-block">
+        010-0000-0000
+      </a>
+      
+      <div class="bg-slate-50 border border-slate-200 p-3 rounded-xl text-left text-xs text-slate-700 mb-4 max-h-24 overflow-y-auto">
+        <p class="font-bold text-slate-500 mb-0.5">상담 메모 요약</p>
+        <div id="alarmPopupMemo" class="whitespace-pre-wrap text-slate-800 leading-relaxed font-normal">내용 없음</div>
+      </div>
+
+      <div class="grid grid-cols-2 gap-2">
+        <button id="alarmPopupDoneBtn" class="w-full py-2.5 px-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl text-xs transition shadow cursor-pointer">
+          지금 통화 완료
+        </button>
+        <button id="alarmPopupSnoozeBtn" class="w-full py-2.5 px-3 bg-slate-800 hover:bg-slate-900 text-white font-bold rounded-xl text-xs transition shadow cursor-pointer">
+          +10분 연기
+        </button>
+      </div>
+      <button onclick="closeAlarmPopup()" class="mt-3 text-xs text-slate-400 hover:text-slate-600 underline cursor-pointer">
+        팝업 닫기
+      </button>
+    </div>
+  </div>
+
+  <!-- 데이터 백업/복원 모달 -->
+  <div id="backupModal" class="fixed inset-0 bg-slate-900/60 z-50 backdrop-blur-xs flex items-center justify-center p-4 hidden">
+    <div class="bg-white rounded-2xl shadow-2xl max-w-sm w-full p-5 border border-slate-200">
+      <div class="flex items-center justify-between pb-3 border-b border-slate-100 mb-4">
+        <h3 class="font-bold text-slate-800 text-sm flex items-center gap-2">
+          <i class="fa-solid fa-database text-indigo-600"></i> 데이터 백업 및 복원
+        </h3>
+        <button onclick="closeBackupModal()" class="text-slate-400 hover:text-slate-600"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+      <div class="space-y-3">
+        <p class="text-xs text-slate-600 leading-relaxed">
+          저장된 모든 콜백 일정을 JSON 파일로 다운로드하거나, 이전에 저장한 백업 파일을 불러옵니다.
+        </p>
+        <button onclick="downloadBackupJSON()" class="w-full py-2 px-3 rounded-lg border border-indigo-200 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold text-xs flex items-center justify-center gap-1.5 transition cursor-pointer">
+          <i class="fa-solid fa-download"></i> JSON 백업 파일 다운로드
+        </button>
+        <div class="pt-2 border-t border-slate-100">
+          <label class="block text-xs font-bold text-slate-700 mb-1">백업 파일 불러오기</label>
+          <input type="file" id="backupFileInput" accept=".json" onchange="restoreBackupJSON(event)" class="text-xs text-slate-500 w-full file:mr-2 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-slate-100 file:text-slate-700 hover:file:bg-slate-200 cursor-pointer">
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 토스트 알림 컨테이너 -->
+  <div id="toastContainer" class="fixed bottom-5 right-5 z-40 flex flex-col gap-2 pointer-events-none"></div>
+
+  <!-- 메인 스크립트 로직 -->
+  <script>
+    // 전역 상태
+    const STORAGE_KEY = 'cs_callback_master_data_v1';
+    const SOUND_PREF_KEY = 'cs_sound_enabled_v1';
+    let callbacks = [];
+    let soundEnabled = true;
+    let audioCtx = null;
+    let currentAlarmId = null;
+    let completingCallbackId = null;
+    const triggeredAlarms = new Set();
+
+    // Web Audio API 합성 차임벨
+    function getAudioContext() {
+      if (!audioCtx) {
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      }
+      if (audioCtx.state === 'suspended') {
+        audioCtx.resume();
+      }
+      return audioCtx;
+    }
+
+    function playPleasantChime() {
+      if (!soundEnabled) return;
+      try {
+        const ctx = getAudioContext();
+        const now = ctx.currentTime;
+
+        // 1음 (D5)
+        const osc1 = ctx.createOscillator();
+        const gain1 = ctx.createGain();
+        osc1.type = 'sine';
+        osc1.frequency.setValueAtTime(587.33, now);
+        gain1.gain.setValueAtTime(0.25, now);
+        gain1.gain.exponentialRampToValueAtTime(0.0001, now + 0.4);
+        osc1.connect(gain1);
+        gain1.connect(ctx.destination);
+        osc1.start(now);
+        osc1.stop(now + 0.4);
+
+        // 2음 (A5)
+        const osc2 = ctx.createOscillator();
+        const gain2 = ctx.createGain();
+        osc2.type = 'triangle';
+        osc2.frequency.setValueAtTime(880.00, now + 0.2);
+        gain2.gain.setValueAtTime(0.3, now + 0.2);
+        gain2.gain.exponentialRampToValueAtTime(0.0001, now + 0.8);
+        osc2.connect(gain2);
+        gain2.connect(ctx.destination);
+        osc2.start(now + 0.2);
+        osc2.stop(now + 0.8);
+      } catch (err) {
+        console.warn('사운드 재생 에러:', err);
+      }
+    }
+
+    function toggleSound() {
+      soundEnabled = !soundEnabled;
+      localStorage.setItem(SOUND_PREF_KEY, soundEnabled);
+      updateSoundButtonUI();
+      if (soundEnabled) {
+        playPleasantChime();
+        showToast('알림 사운드가 활성화되었습니다.', 'info');
+      } else {
+        showToast('알림 사운드가 음소거되었습니다.', 'info');
+      }
+    }
+
+    function updateSoundButtonUI() {
+      const btn = document.getElementById('soundToggleBtn');
+      if (soundEnabled) {
+        btn.innerHTML = `<i class="fa-solid fa-volume-high text-emerald-600"></i><span class="hidden sm:inline">사운드 켬</span>`;
+      } else {
+        btn.innerHTML = `<i class="fa-solid fa-volume-xmark text-slate-400"></i><span class="hidden sm:inline">음소거</span>`;
+      }
+    }
+
+    // 데스크톱 알림
+    function requestNotification() {
+      if (!('Notification' in window)) {
+        showToast('현재 브라우저는 데스크톱 알림을 지원하지 않습니다.', 'warn');
+        return;
+      }
+      Notification.requestPermission().then(permission => {
+        if (permission === 'granted') {
+          showToast('데스크톱 알림 권한이 허용되었습니다.', 'success');
+          new Notification('민원 콜백 알리미', {
+            body: '통화 약속 시간이 되면 바탕화면으로 알림이 전송됩니다.',
+            icon: 'https://placehold.co/128x128/4f46e5/ffffff?text=CS'
+          });
+        } else {
+          showToast('알림 권한이 거부되었거나 차단되어 있습니다.', 'warn');
+        }
+      });
+    }
+
+    function fireDesktopNotification(item) {
+      if ('Notification' in window && Notification.permission === 'granted') {
+        const notif = new Notification(`[통화 약속] ${item.custName} 고객님`, {
+          body: `연락처: ${item.custPhone}\n메모: ${item.memo || '없음'}`,
+          icon: 'https://placehold.co/128x128/e11d48/ffffff?text=CALL',
+          tag: item.id
+        });
+        notif.onclick = () => {
+          window.focus();
+          notif.close();
+        };
+      }
+    }
+
+    // 토스트 UI
+    function showToast(message, type = 'info') {
+      const container = document.getElementById('toastContainer');
+      const toast = document.createElement('div');
+      const badgeStyles = {
+        info: 'bg-slate-900 text-white',
+        success: 'bg-emerald-600 text-white',
+        warn: 'bg-amber-600 text-white',
+        error: 'bg-rose-600 text-white',
+      };
+      toast.className = `pointer-events-auto px-4 py-2.5 rounded-xl shadow-lg text-xs font-semibold flex items-center gap-2 transform transition-all duration-200 translate-y-2 opacity-0 ${badgeStyles[type] || badgeStyles.info}`;
+      toast.innerHTML = `<i class="fa-solid fa-circle-info text-sm"></i><span>${escapeHtml(message)}</span>`;
+      container.appendChild(toast);
+      requestAnimationFrame(() => toast.classList.remove('translate-y-2', 'opacity-0'));
+      setTimeout(() => {
+        toast.classList.add('translate-y-2', 'opacity-0');
+        setTimeout(() => toast.remove(), 250);
+      }, 3500);
+    }
+
+    function escapeHtml(text) {
+      if (!text) return '';
+      return String(text)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+    }
+
+    // 데이터 저장 및 로드
+    function loadData() {
+      try {
+        const raw = localStorage.getItem(STORAGE_KEY);
+        if (raw) {
+          callbacks = JSON.parse(raw);
+        } else {
+          initDemoData();
+        }
+        const soundPref = localStorage.getItem(SOUND_PREF_KEY);
+        if (soundPref !== null) {
+          soundEnabled = soundPref === 'true';
+        }
+        updateSoundButtonUI();
+      } catch (e) {
+        console.error('데이터 파싱 실패:', e);
+        callbacks = [];
+      }
+    }
+
+    function saveData() {
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(callbacks));
+      } catch (e) {
+        console.error('로컬스토리지 저장 실패:', e);
+      }
+    }
+
+    // 초기 샘플 데이터
+    function initDemoData() {
+      const now = new Date();
+      const p1 = new Date(now.getTime() + 6 * 60000);
+      const p2 = new Date(now.getTime() + 25 * 60000);
+      const p3 = new Date(now.getTime() - 12 * 60000);
+
+      callbacks = [
+        {
+          id: 'cb_demo_1',
+          custName: '박서준 고객님',
+          custPhone: '010-4821-9923',
+          targetDateTime: formatDateTimeInput(p1),
+          priority: 'urgent',
+          agentName: '김상담',
+          memo: '파손 배송품 반품 접수 및 교환 발송 일정 재확인 요청 건.',
+          status: 'pending',
+          createdAt: new Date().toISOString()
+        },
+        {
+          id: 'cb_demo_2',
+          custName: '이수진 님',
+          custPhone: '010-3349-1082',
+          targetDateTime: formatDateTimeInput(p2),
+          priority: 'high',
+          agentName: '이상담',
+          memo: '정기 결제 영수증 재발송 및 사업자 등록번호 정정 안내 건.',
+          status: 'pending',
+          createdAt: new Date().toISOString()
+        },
+        {
+          id: 'cb_demo_3',
+          custName: '정우성 고객님',
+          custPhone: '010-8812-7491',
+          targetDateTime: formatDateTimeInput(p3),
+          priority: 'urgent',
+          agentName: '박상담',
+          memo: '오전 중 긴급 확인 후 전화 요청하셨던 강성 민원 건.',
+          status: 'pending',
+          createdAt: new Date().toISOString()
+        }
+      ];
+      saveData();
+    }
+
+    function formatDateTimeInput(d) {
+      const offset = d.getTimezoneOffset() * 60000;
+      return new Date(d.getTime() - offset).toISOString().slice(0, 16);
+    }
+
+    // 모달 관리
+    function openAddModal() {
+      document.getElementById('modalTitle').innerHTML = `<i class="fa-solid fa-phone-plus text-indigo-600"></i> 새 민원 콜백 예약 등록`;
+      document.getElementById('addForm').reset();
+      document.getElementById('editId').value = '';
+      setQuickTime(15);
+      document.getElementById('addModal').classList.remove('hidden');
+    }
+
+    function openEditModal(id) {
+      const item = callbacks.find(c => c.id === id);
+      if (!item) return;
+      document.getElementById('modalTitle').innerHTML = `<i class="fa-solid fa-pencil text-indigo-600"></i> 통화 예약 일정 수정`;
+      document.getElementById('editId').value = item.id;
+      document.getElementById('custName').value = item.custName;
+      document.getElementById('custPhone').value = item.custPhone;
+      document.getElementById('targetDateTime').value = item.targetDateTime;
+      document.getElementById('priority').value = item.priority || 'normal';
+      document.getElementById('agentName').value = item.agentName || '';
+      document.getElementById('memo').value = item.memo || '';
+      document.getElementById('addModal').classList.remove('hidden');
+    }
+
+    function closeModal() {
+      document.getElementById('addModal').classList.add('hidden');
+    }
+
+    function setQuickTime(mins) {
+      const d = new Date(Date.now() + mins * 60000);
+      document.getElementById('targetDateTime').value = formatDateTimeInput(d);
+    }
+
+    function setTomorrowMorning() {
+      const d = new Date();
+      d.setDate(d.getDate() + 1);
+      d.setHours(10, 0, 0, 0);
+      document.getElementById('targetDateTime').value = formatDateTimeInput(d);
+    }
+
+    function insertTemplate(type) {
+      const memoEl = document.getElementById('memo');
+      const templates = {
+        '단순안내': '[요청 사항 확인 후 추가 증빙 서류 접수 방법 안내 건]',
+        '부재중': '[1차 부재중으로 인한 재연락 약속 건 - 확인 후 재통화]',
+        '환불검토': '[부서 내부 승인 완료 여부 및 환불 처리 일정 확정 안내 건]',
+        '강성에스컬레이션': '[불만 접수 건 - 책임 관리자 확인 후 즉시 해결책 제시 요망]'
+      };
+      memoEl.value = templates[type] || '';
+    }
+
+    function handleFormSubmit(e) {
+      e.preventDefault();
+      const editId = document.getElementById('editId').value;
+      const custName = document.getElementById('custName').value.trim();
+      const custPhone = document.getElementById('custPhone').value.trim();
+      const targetDateTime = document.getElementById('targetDateTime').value;
+      const priority = document.getElementById('priority').value;
+      const agentName = document.getElementById('agentName').value.trim() || '미지정';
+      const memo = document.getElementById('memo').value.trim();
+
+      if (editId) {
+        const item = callbacks.find(c => c.id === editId);
+        if (item) {
+          item.custName = custName;
+          item.custPhone = custPhone;
+          item.targetDateTime = targetDateTime;
+          item.priority = priority;
+          item.agentName = agentName;
+          item.memo = memo;
+          showToast(`${custName} 예약 정보가 수정되었습니다.`, 'success');
+        }
+      } else {
+        const newItem = {
+          id: 'cb_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4),
+          custName,
+          custPhone,
+          targetDateTime,
+          priority,
+          agentName,
+          memo,
+          status: 'pending',
+          createdAt: new Date().toISOString()
+        };
+        callbacks.unshift(newItem);
+        showToast(`${custName} 고객님 통화 예약이 등록되었습니다.`, 'success');
+      }
+
+      saveData();
+      closeModal();
+      renderApp();
+      getAudioContext();
+    }
+
+    // 완료 처리 모달
+    function openCompleteModal(id) {
+      const item = callbacks.find(c => c.id === id);
+      if (!item) return;
+      completingCallbackId = id;
+      document.getElementById('completeTargetInfo').textContent = `${item.custName} (${item.custPhone})`;
+      document.getElementById('completeNote').value = '';
+      document.getElementById('completeModal').classList.remove('hidden');
+    }
+
+    function closeCompleteModal() {
+      document.getElementById('completeModal').classList.add('hidden');
+      completingCallbackId = null;
+    }
+
+    function confirmComplete() {
+      if (!completingCallbackId) return;
+      const item = callbacks.find(c => c.id === completingCallbackId);
+      if (!item) return;
+
+      const outcome = document.getElementById('completeOutcome').value;
+      const note = document.getElementById('completeNote').value.trim();
+
+      item.status = 'completed';
+      item.outcome = outcome;
+      item.outcomeNote = note;
+      item.completedAt = new Date().toISOString();
+
+      saveData();
+      closeCompleteModal();
+      closeAlarmPopup();
+      renderApp();
+      showToast(`${item.custName} 상담이 [${outcome}] 처리되었습니다.`, 'success');
+    }
+
+    function reopenCallback(id) {
+      const item = callbacks.find(c => c.id === id);
+      if (!item) return;
+      item.status = 'pending';
+      delete item.completedAt;
+      delete item.outcome;
+      delete item.outcomeNote;
+      saveData();
+      renderApp();
+      showToast(`${item.custName} 일정을 다시 진행 중으로 복원했습니다.`, 'info');
+    }
+
+    function delayCallback(id, minutes) {
+      const item = callbacks.find(c => c.id === id);
+      if (!item) return;
+      const nextTime = new Date(Date.now() + minutes * 60000);
+      item.targetDateTime = formatDateTimeInput(nextTime);
+      item.status = 'pending';
+      triggeredAlarms.delete(item.id);
+      saveData();
+      closeAlarmPopup();
+      renderApp();
+      showToast(`${item.custName} 고객님 일정이 ${minutes}분 연기되었습니다 (${item.targetDateTime.slice(11,16)}).`, 'info');
+    }
+
+    function deleteCallback(id) {
+      const item = callbacks.find(c => c.id === id);
+      if (!item) return;
+      if (confirm(`'${item.custName}' 고객님의 통화 예약을 삭제하시겠습니까?`)) {
+        callbacks = callbacks.filter(c => c.id !== id);
+        saveData();
+        renderApp();
+        showToast('일정이 삭제되었습니다.', 'info');
+      }
+    }
+
+    // 긴급 팝업 관리
+    function triggerAlarmPopup(item) {
+      currentAlarmId = item.id;
+      document.getElementById('alarmPopupName').textContent = item.custName + ' 고객님';
+      const phoneEl = document.getElementById('alarmPopupPhone');
+      phoneEl.textContent = item.custPhone;
+      phoneEl.href = `tel:${item.custPhone}`;
+      document.getElementById('alarmPopupMemo').textContent = item.memo || '등록된 특이사항 메모가 없습니다.';
+
+      document.getElementById('alarmPopupDoneBtn').onclick = () => {
+        closeAlarmPopup();
+        openCompleteModal(item.id);
+      };
+      document.getElementById('alarmPopupSnoozeBtn').onclick = () => {
+        delayCallback(item.id, 10);
+      };
+
+      document.getElementById('alarmPopupModal').classList.remove('hidden');
+      playPleasantChime();
+      fireDesktopNotification(item);
+    }
+
+    function closeAlarmPopup() {
+      document.getElementById('alarmPopupModal').classList.add('hidden');
+      currentAlarmId = null;
+    }
+
+    // 데이터 백업 및 복원
+    function openBackupModal() {
+      document.getElementById('backupModal').classList.remove('hidden');
+    }
+    function closeBackupModal() {
+      document.getElementById('backupModal').classList.add('hidden');
+    }
+
+    function downloadBackupJSON() {
+      const json = JSON.stringify(callbacks, null, 2);
+      const blob = new Blob([json], { type: 'application/json' });
+      const link = document.createElement('a');
+      link.href = URL.createObjectURL(blob);
+      link.download = `콜백_백업_${new Date().toISOString().slice(0, 10)}.json`;
+      link.click();
+      showToast('백업 파일이 다운로드되었습니다.', 'success');
+    }
+
+    function restoreBackupJSON(e) {
+      const file = e.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = (evt) => {
+        try {
+          const parsed = JSON.parse(evt.target.result);
+          if (Array.isArray(parsed)) {
+            callbacks = parsed;
+            saveData();
+            renderApp();
+            closeBackupModal();
+            showToast('백업 데이터가 성공적으로 복원되었습니다.', 'success');
+          } else {
+            showToast('올바른 백업 파일 형식이 아닙니다.', 'error');
+          }
+        } catch (err) {
+          showToast('JSON 파일을 읽는 중 오류가 발생했습니다.', 'error');
+        }
+      };
+      reader.readAsText(file);
+    }
+
+    // CSV 엑셀 내보내기 (BOM 포함)
+    function exportToCSV() {
+      if (callbacks.length === 0) {
+        showToast('내보낼 데이터가 없습니다.', 'warn');
+        return;
+      }
+      let csv = "\uFEFF고객명,연락처,약속일시,긴급도,담당상담원,상태,처리결과,상담메모,결과메모\n";
+      callbacks.forEach(r => {
+        const priorityLabels = { urgent: '긴급/불만', high: '중요', normal: '일반', low: '단순안내' };
+        csv += `"${r.custName}","${r.custPhone}","${r.targetDateTime.replace('T', ' ')}","${priorityLabels[r.priority] || '일반'}","${r.agentName || ''}","${r.status === 'completed' ? '완료' : '진행중'}","${r.outcome || ''}","${(r.memo || '').replace(/"/g, '""')}","${(r.outcomeNote || '').replace(/"/g, '""')}"\n`;
+      });
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+      const link = document.createElement('a');
+      link.href = URL.createObjectURL(blob);
+      link.download = `민원콜백_일일리포트_${new Date().toISOString().slice(0, 10)}.csv`;
+      link.click();
+      showToast('일일 엑셀 리포트가 생성되었습니다.', 'success');
+    }
+
+    // 시계 갱신 및 실시간 알람 감시 루프 (매초 실행)
+    function ticker() {
+      const now = new Date();
+      
+      // 시계 UI 업데이트
+      const clockEl = document.getElementById('currentClock');
+      if (clockEl) {
+        clockEl.textContent = now.toLocaleString('ko-KR', {
+          year: 'numeric', month: '2-digit', day: '2-digit', weekday: 'short',
+          hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false
+        });
+      }
+
+      // 알람 감시
+      const nowTime = now.getTime();
+      callbacks.forEach(item => {
+        if (item.status === 'pending') {
+          const target = new Date(item.targetDateTime).getTime();
+          // 약속 시간 도달 및 3분 이내 지연 건에 대해 팝업 트리거
+          if (nowTime >= target && nowTime <= target + 180000 && !triggeredAlarms.has(item.id)) {
+            triggeredAlarms.add(item.id);
+            triggerAlarmPopup(item);
+          }
+        }
+      });
+
+      // 매 분 0초마다 리스트 남은 시간 계산 갱신
+      if (now.getSeconds() === 0) {
+        renderApp();
+      }
+    }
+
+    // 화면 UI 렌더링
+    function renderApp() {
+      renderHeroCard();
+      renderStats();
+      renderList();
+    }
+
+    // 헤드업 히어로 카드
+    function renderHeroCard() {
+      const hero = document.getElementById('urgentHeroCard');
+      const pendingList = callbacks
+        .filter(c => c.status === 'pending')
+        .sort((a, b) => new Date(a.targetDateTime) - new Date(b.targetDateTime));
+
+      const nextCall = pendingList[0];
+      if (!nextCall) {
+        hero.classList.add('hidden');
+        return;
+      }
+
+      hero.classList.remove('hidden');
+      const targetTime = new Date(nextCall.targetDateTime).getTime();
+      const diffMin = Math.floor((targetTime - Date.now()) / 60000);
+
+      document.getElementById('heroCustomerName').textContent = nextCall.custName;
+      document.getElementById('heroPhoneText').textContent = nextCall.custPhone;
+      document.getElementById('heroTelLink').href = `tel:${nextCall.custPhone}`;
+      document.getElementById('heroTelBtn').href = `tel:${nextCall.custPhone}`;
+      document.getElementById('heroQuickDoneBtn').onclick = () => openCompleteModal(nextCall.id);
+      document.getElementById('heroQuickSnoozeBtn').onclick = () => delayCallback(nextCall.id, 10);
+
+      const timeText = document.getElementById('heroTimeRemaining');
+      const iconBox = document.getElementById('heroIconBox');
+
+      const priorityMap = {
+        urgent: '<span class="px-2 py-0.5 rounded bg-rose-500/80 text-white font-bold text-[10px]">🔴 긴급/불만</span>',
+        high: '<span class="px-2 py-0.5 rounded bg-amber-500/80 text-white font-bold text-[10px]">🟠 중요</span>',
+        normal: '<span class="px-2 py-0.5 rounded bg-emerald-500/80 text-white font-bold text-[10px]">🟢 일반</span>',
+        low: '<span class="px-2 py-0.5 rounded bg-slate-500/80 text-white font-bold text-[10px]">⚪ 단순</span>'
+      };
+      document.getElementById('heroPriorityBadge').innerHTML = priorityMap[nextCall.priority] || '';
+
+      if (diffMin < 0) {
+        hero.className = "rounded-2xl p-5 text-white shadow-xl flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4 border border-rose-400 bg-gradient-to-r from-rose-600 to-rose-700 pulse-danger";
+        timeText.innerHTML = `⚠️ <strong class="underline">${Math.abs(diffMin)}분 초과 지연 중!</strong> 즉각 통화가 필요합니다. (${nextCall.targetDateTime.replace('T', ' ')})`;
+        iconBox.innerHTML = `<i class="fa-solid fa-triangle-exclamation text-rose-200 animate-bounce"></i>`;
+      } else if (diffMin <= 10) {
+        hero.className = "rounded-2xl p-5 text-white shadow-xl flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4 border border-amber-400 bg-gradient-to-r from-amber-600 via-amber-500 to-orange-600";
+        timeText.innerHTML = `⏳ <strong class="underline">${diffMin}분 뒤 예정 (임박)</strong> - 사전 준비를 진행하세요. (${nextCall.targetDateTime.replace('T', ' ')})`;
+        iconBox.innerHTML = `<i class="fa-solid fa-bell-concierge text-amber-200"></i>`;
+      } else {
+        hero.className = "rounded-2xl p-5 text-white shadow-xl flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4 border border-indigo-500 bg-gradient-to-r from-slate-900 via-indigo-950 to-indigo-900";
+        const h = Math.floor(diffMin / 60);
+        const m = diffMin % 60;
+        timeText.textContent = `통화 약속까지 ${h > 0 ? h + '시간 ' : ''}${m}분 남음 (${nextCall.targetDateTime.replace('T', ' ')})`;
+        iconBox.innerHTML = `<i class="fa-solid fa-calendar-check text-indigo-300"></i>`;
+      }
+    }
+
+    // 통계 카운터
+    function renderStats() {
+      let pending = 0;
+      let overdue = 0;
+      let done = 0;
+      const now = Date.now();
+
+      callbacks.forEach(c => {
+        if (c.status === 'completed') {
+          done++;
+        } else {
+          const target = new Date(c.targetDateTime).getTime();
+          if (target < now) overdue++;
+          else pending++;
+        }
+      });
+
+      document.getElementById('statPending').textContent = pending;
+      document.getElementById('statOverdue').textContent = overdue;
+      document.getElementById('statDone').textContent = done;
+    }
+
+    // 목록 렌더링
+    function renderList() {
+      const container = document.getElementById('callbackListContainer');
+      const empty = document.getElementById('emptyState');
+      const badge = document.getElementById('listCountBadge');
+      const search = document.getElementById('searchInput').value.toLowerCase().trim();
+      const fStatus = document.getElementById('filterStatus').value;
+      const fPriority = document.getElementById('filterPriority').value;
+      const fDate = document.getElementById('dateScopeSelect').value;
+      const todayPrefix = new Date().toISOString().slice(0, 10);
+
+      let filtered = callbacks.filter(item => {
+        // 날짜 필터
+        if (fDate === 'today' && !item.targetDateTime.startsWith(todayPrefix)) return false;
+
+        // 상태 필터
+        if (fStatus === 'pending' && item.status !== 'pending') return false;
+        if (fStatus === 'completed' && item.status !== 'completed') return false;
+
+        // 중요도 필터
+        if (fPriority !== 'all' && item.priority !== fPriority) return false;
+
+        // 검색어 필터
+        if (search) {
+          const matchName = (item.custName || '').toLowerCase().includes(search);
+          const matchPhone = (item.custPhone || '').includes(search);
+          const matchAgent = (item.agentName || '').toLowerCase().includes(search);
+          const matchMemo = (item.memo || '').toLowerCase().includes(search);
+          if (!matchName && !matchPhone && !matchAgent && !matchMemo) return false;
+        }
+
+        return true;
+      });
+
+      // 정렬 (진행 건: 약속시간 순, 완료 건: 최근 완료 순)
+      filtered.sort((a, b) => {
+        if (a.status !== b.status) return a.status === 'pending' ? -1 : 1;
+        return new Date(a.targetDateTime) - new Date(b.targetDateTime);
+      });
+
+      badge.textContent = `${filtered.length}건`;
+
+      if (filtered.length === 0) {
+        container.innerHTML = '';
+        empty.classList.remove('hidden');
+        empty.classList.add('flex');
+        return;
+      }
+
+      empty.classList.add('hidden');
+      empty.classList.remove('flex');
+
+      container.innerHTML = filtered.map(item => {
+        const isDone = item.status === 'completed';
+        const target = new Date(item.targetDateTime).getTime();
+        const diffMin = Math.floor((target - Date.now()) / 60000);
+
+        let statusBadge = '';
+        if (isDone) {
+          statusBadge = `<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-200">완료: ${item.outcome || '정상처리'}</span>`;
+        } else if (diffMin < 0) {
+          statusBadge = `<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-rose-100 text-rose-700 border border-rose-200 animate-pulse">${Math.abs(diffMin)}분 지연됨!</span>`;
+        } else if (diffMin <= 15) {
+          statusBadge = `<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-200">${diffMin}분 뒤 예정 (임박)</span>`;
+        } else {
+          statusBadge = `<span class="px-2 py-0.5 rounded text-[10px] font-medium bg-slate-100 text-slate-700 border border-slate-200">${diffMin}분 뒤 예정</span>`;
+        }
+
+        const priorityMap = {
+          urgent: '<span class="text-rose-600 font-bold text-xs"><i class="fa-solid fa-circle-exclamation"></i> 긴급</span>',
+          high: '<span class="text-amber-600 font-bold text-xs"><i class="fa-solid fa-triangle-exclamation"></i> 중요</span>',
+          normal: '<span class="text-emerald-600 text-xs">일반</span>',
+          low: '<span class="text-slate-400 text-xs">단순</span>'
+        };
+
+        return `
+          <div class="p-4 hover:bg-slate-50 transition flex flex-col md:flex-row items-start md:items-center justify-between gap-3 ${isDone ? 'opacity-65 bg-slate-50/50' : ''}">
+            
+            <div class="flex items-start gap-3.5 flex-1 min-w-0">
+              <!-- 시간 컬럼 -->
+              <div class="flex flex-col items-center justify-center w-16 shrink-0 pt-0.5 text-center">
+                <span class="text-[10px] text-slate-400 font-semibold font-mono">${item.targetDateTime.slice(5, 10)}</span>
+                <span class="text-base font-extrabold text-slate-800 font-mono tracking-tight leading-none my-0.5">${item.targetDateTime.slice(11, 16)}</span>
+                <div class="mt-0.5">${statusBadge}</div>
+              </div>
+
+              <!-- 민원 세부 정보 -->
+              <div class="border-l border-slate-200 pl-3.5 flex-1 min-w-0">
+                <div class="flex flex-wrap items-center gap-2 mb-1">
+                  ${priorityMap[item.priority] || ''}
+                  <span class="font-bold text-sm text-slate-900 ${isDone ? 'line-through text-slate-400' : ''}">${escapeHtml(item.custName)}</span>
+                  <a href="tel:${escapeHtml(item.custPhone)}" class="text-xs font-mono text-indigo-600 hover:text-indigo-800 hover:underline flex items-center gap-1" title="전화 걸기">
+                    <i class="fa-solid fa-phone text-[10px]"></i> ${escapeHtml(item.custPhone)}
+                  </a>
+                  <span class="text-[11px] text-slate-400 font-medium">| 담당: <strong>${escapeHtml(item.agentName || '미지정')}</strong></span>
+                </div>
+
+                ${item.memo ? `
+                  <p class="text-xs text-slate-700 bg-slate-50 border border-slate-200/80 p-2 rounded-lg line-clamp-2 max-w-3xl mt-1">
+                    <span class="text-slate-400 font-bold">메모:</span> ${escapeHtml(item.memo)}
+                  </p>
+                ` : ''}
+
+                ${isDone && item.outcomeNote ? `
+                  <p class="text-xs text-emerald-700 bg-emerald-50/60 border border-emerald-200/60 px-2 py-1 rounded-lg mt-1 inline-block">
+                    <span class="font-bold">결과:</span> ${escapeHtml(item.outcomeNote)}
+                  </p>
+                ` : ''}
+              </div>
+            </div>
+
+            <!-- 액션 버튼 그룹 -->
+            <div class="flex flex-wrap items-center gap-1.5 self-end md:self-center shrink-0">
+              ${!isDone ? `
+                <button onclick="delayCallback('${item.id}', 10)" class="px-2 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold transition cursor-pointer" title="10분 연기">
+                  +10분
+                </button>
+                <button onclick="delayCallback('${item.id}', 30)" class="px-2 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold transition cursor-pointer" title="30분 연기">
+                  +30분
+                </button>
+                <button onclick="openCompleteModal('${item.id}')" class="px-3 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-xs transition flex items-center gap-1 cursor-pointer">
+                  <i class="fa-solid fa-check"></i> 완료
+                </button>
+              ` : `
+                <button onclick="reopenCallback('${item.id}')" class="px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-600 text-xs font-semibold flex items-center gap-1 transition cursor-pointer">
+                  <i class="fa-solid fa-rotate-left"></i> 복원
+                </button>
+              `}
+              <button onclick="openEditModal('${item.id}')" class="p-1.5 rounded-lg text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 transition cursor-pointer" title="수정">
+                <i class="fa-solid fa-pencil text-xs"></i>
+              </button>
+              <button onclick="deleteCallback('${item.id}')" class="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition cursor-pointer" title="삭제">
+                <i class="fa-regular fa-trash-can text-xs"></i>
+              </button>
+            </div>
+
+          </div>
+        `;
+      }).join('');
+    }
+
+    // 초기 로딩
+    window.addEventListener('DOMContentLoaded', () => {
+      loadData();
+      renderApp();
+      setInterval(ticker, 1000);
+      ticker();
+    });
+  </script>
+</body>
+</html>
